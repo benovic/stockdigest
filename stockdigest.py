@@ -75,7 +75,7 @@ for ticker in config.tickers:
 	email_subject = 'Stock update for ' + ticker + ': ' + pct
 	email_body = '' 
 
-	email_body += ticker + ' gained <strong>' + pct + '</strong> in the last ' + str(timespan) + ' Days! <br>'
+	email_body += ticker + ' gained <strong>' + pct + '</strong> in the last ' + str(config.timespan) + ' Days! <br>'
 
 	email_body += '<img src="cid:image1"><br><br>'
 
