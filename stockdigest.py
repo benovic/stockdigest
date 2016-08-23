@@ -41,8 +41,10 @@ def get_stock_graph(data):
 	fig.savefig("image.png")
 
 def get_google_news(ticker):
+	# split symbol in case of notation for yahoo, like GOOG.DE
+	head, sep, tail = ticker.partition('.')
 	# get news data from google finance feed (feedparser)
-	rss_url = 'https://www.google.com/finance/company_news?output=rss&q=' + ticker
+	rss_url = 'https://www.google.com/finance/company_news?output=rss&q=' + head
 	d = feedparser.parse(rss_url)
 	news = '<br> News: <br><ul>' 
 	for post in d.entries:
