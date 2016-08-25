@@ -3,10 +3,19 @@
 # download stock data from yahoo
 import os
 import sys
+
+# google intraday data things
+import pandas_datareader.data as web
+import pandas as pd
+import requests
+
+
 from pandas.io.data import get_data_yahoo
 from datetime import datetime
 from datetime import timedelta
 import matplotlib.pyplot as plt
+# from matplotlib.finance import candlestick, candlestick2, candlestick2_ohlc
+import matplotlib.dates as mdates
 import StringIO
 import urllib
 
@@ -32,19 +41,15 @@ import config
 
 
 # functions
-def get_stock_graph(data):
-	data.plot(subplots = True, figsize= (8, 4))
-	plt.legend(loc = 'best')
+def get_stock_graph(data, ticker):
+	plt.style.use('ggplot')
+	data.plot(x='Datetime',y='Close', figsize= (15, 4), title=ticker)
+	plt.savefig("image.png")
 	#plt.show()
-	fig = plt.gcf()
-	imgdata = StringIO.StringIO()
-	fig.savefig("image.png")
 
 def get_google_news(ticker):
-	# split symbol in case of notation for yahoo, like GOOG.DE
-	head, sep, tail = ticker.partition('.')
 	# get news data from google finance feed (feedparser)
-	rss_url = 'https://www.google.com/finance/company_news?output=rss&q=' + head
+	rss_url = 'https://www.google.com/finance/company_news?output=rss&q=' + ticker
 	d = feedparser.parse(rss_url)
 	news = '<br> News: <br><ul>' 
 	for post in d.entries:
@@ -58,20 +63,51 @@ def pct_change(data):
 	pct = "%.2f" % (pct)
 	return pct	
 
+def get_intraday_data(symbol, exchange, interval_seconds=301, num_days=10):
+	# Specify URL string based on function inputs.
+	url_string = 'http://www.google.com/finance/getprices?q={0}'.format(symbol.upper())
+	url_string += '&x=' + exchange # to include other exchanges
+	url_string += "&i={0}&p={1}d&f=d,o,h,l,c,v".format(interval_seconds,num_days)
+	# Request the text, and split by each line
+	r = requests.get(url_string).text.split()
+	# Split each line by a comma, starting at the 8th line
+	r = [line.split(',') for line in r[8:]]
+	# Save data in Pandas DataFrame
+	df = pd.DataFrame(r, columns=['Datetime','Close','High','Low','Open','Volume'])
+
+	# Convert UNIX to Datetime format
+	df['Datetime'] = df['Datetime'].apply(lambda x: datetime.fromtimestamp(int(x[1:])))
+	# Convert to floats
+	df['Open'] = df['Open'].apply(lambda x: float(x))
+	df['Close'] = df['Close'].apply(lambda x: float(x))
+
+	return df
+
 # get start and end days
 end = datetime.today()
 start = end - timedelta(config.timespan)
 
+
+
 for ticker in config.tickers:
-	#fetch stock data from yahoo 
-	data = get_data_yahoo(ticker, start, end)[['Close']] # We just need Close for now
-	#save image for later (image.png) TODO: Put in tmp directory
-	get_stock_graph(data)
+	# split symbol in case of notation for yahoo, like GOOG.DE
+	exchange, sep, symbol = ticker.partition(':')
 	
-	# Compose  Email
+	# fetch stock data from google
+	data = get_intraday_data(symbol,exchange, 301, config.timespan)
+	#safe chart as image
+	get_stock_graph(data, ticker)
+	
+	# get google News
+	google_news = get_google_news(ticker)
+	
+	# get relative change percent for timespan
 	pct = pct_change(data) + '%'
 	if pct[0] != '-':
 		pct = '+' + pct
+	
+	# Compose  Email
+	
 
 
 	email_subject = 'Stock update for ' + ticker + ': ' + pct
@@ -81,7 +117,7 @@ for ticker in config.tickers:
 
 	email_body += '<img src="cid:image1"><br><br>'
 
-	email_body += get_google_news(ticker)
+	email_body += google_news
 
 	# Send Email
 	# Create the root message and fill in the from, to, and subject headers
